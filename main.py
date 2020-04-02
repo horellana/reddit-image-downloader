@@ -1,10 +1,12 @@
 import os
+import sys
 import json
-import aiohttp
 import asyncio
 import argparse
-from aiofile import AIOFile, Writer
 from urllib.parse import urlparse
+
+import aiohttp
+from aiofile import AIOFile, Writer
 
 
 def has_allowed_file_extensions(url):
@@ -56,18 +58,22 @@ def get_url_filename(url):
 async def download_image(session, url, folder):
     print(f'Downloading {url} to folder {folder}')
 
-    async with session.get(url) as response:
-        if response.status != 200:
-            print(f'Failed to download: {url}')
-        else:
-            [filename, extension] = get_url_filename(url)
+    try:
+        async with session.get(url) as response:
+            if response.status != 200:
+                print(f'Failed to download: {url}')
+            else:
+                [filename, extension] = get_url_filename(url)
 
-            async with AIOFile(f'{folder}/{filename}.{extension}', 'wb') as afh:
-                writer = Writer(afh)
-                bytes = await response.read()
-                await writer(bytes)
+                async with AIOFile(f'{folder}/{filename}', 'wb') as afh:
+                    writer = Writer(afh)
+                    bytes = await response.read()
+                    await writer(bytes)
 
-                print(f'Correctly downloaded {url}, to folder {folder}')
+                    print(f'Correctly downloaded {url}, to folder {folder}')
+
+    except Exception as e:
+        print(f'Error: {e}', file=sys.stderr)
 
 
 async def get_url(session, url):
@@ -75,7 +81,7 @@ async def get_url(session, url):
         return await response.text()
 
 
-async def main(save_folder, subreddit):
+async def download_subreddit(save_folder, subreddit):
     url = get_subreddit_url(subreddit)
 
     async with aiohttp.ClientSession() as session:
@@ -88,10 +94,17 @@ async def main(save_folder, subreddit):
         await asyncio.gather(*tasks)
 
 
+async def main(save_folder, subreddit):
+    tasks = [download_subreddit(args.folder, subreddit) for subreddit in args.subreddit]
+    await asyncio.gather(*tasks)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-f', '--folder', help='where to save images', required=True)
-    parser.add_argument('-r', '--subreddit', help='subreddit name', required=True)
+    parser.add_argument('-r', '--subreddit',
+                        help='subreddit name', nargs='+',
+                        required=True)
     args = parser.parse_args()
 
     print(f'args: {args}')
