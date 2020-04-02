@@ -1,9 +1,10 @@
+import os
 import json
 import aiohttp
 import asyncio
 import argparse
-from uuid import uuid4
 from aiofile import AIOFile, Writer
+from urllib.parse import urlparse
 
 
 def has_allowed_file_extensions(url):
@@ -40,6 +41,18 @@ def parse_reddit_response(resp):
     return result
 
 
+def get_url_filename(url):
+    parsed = urlparse(url)
+
+    basename = os.path.basename(parsed.path)
+    print(f'Basename: {basename}')
+
+    extension = os.path.splitext(parsed.path)[1]
+    print(f'Extension {extension}')
+
+    return [basename, extension]
+
+
 async def download_image(session, url, folder):
     print(f'Downloading {url} to folder {folder}')
 
@@ -47,7 +60,9 @@ async def download_image(session, url, folder):
         if response.status != 200:
             print(f'Failed to download: {url}')
         else:
-            async with AIOFile(f'{folder}/{uuid4()}.jpg', 'wb') as afh:
+            [filename, extension] = get_url_filename(url)
+
+            async with AIOFile(f'{folder}/{filename}.{extension}', 'wb') as afh:
                 writer = Writer(afh)
                 bytes = await response.read()
                 await writer(bytes)
