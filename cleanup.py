@@ -26,7 +26,7 @@ def remove_duplicates(folder):
 
     for key, value in things.items():
         if len(value) > 1:
-            print(f'REMOVE: {value[0].absolute()}')
+            print(f'REMOVE duplicate: {value[0].absolute()}')
             os.remove(value[0].absolute())
 
 
@@ -43,11 +43,12 @@ def remove_by_resolution(folder):
 
             if width < 1920 or height < 1080:
                 os.remove(file.absolute())
-                print('REMOVE')
+                print('REMOVE wrong resolution')
+                continue
 
             if width / height != 16 / 9:
                 os.remove(file.absolute())
-                print('REMOVE')
+                print('REMOVE wrong proportion')
 
         except Exception as e:
             print(f'Error: {e}', file=sys.stderr)
