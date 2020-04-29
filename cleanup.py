@@ -49,6 +49,7 @@ def remove_by_resolution(folder):
             if width / height != 16 / 9:
                 os.remove(file.absolute())
                 print('REMOVE wrong proportion')
+                continue
 
         except Exception as e:
             print(f'Error: {e}', file=sys.stderr)
