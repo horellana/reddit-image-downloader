@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 import aiohttp
 from aiofile import AIOFile, Writer
 
+import cleanup
 
 def has_allowed_file_extensions(url):
     extensions = ['.jpeg',
@@ -26,21 +27,26 @@ def get_subreddit_url(subreddit):
 
 
 def parse_reddit_response(resp):
-    result = []
+    try:
+        result = []
 
-    for child in resp['data']['children']:
-        data = child['data']
+        for child in resp['data']['children']:
+            data = child['data']
 
-        item = {
-            'title': data['title'],
-            'subreddit': data['subreddit'],
-            'mature': data['over_18'],
-            'url': data['url']
-        }
+            item = {
+                'title': data['title'],
+                'subreddit': data['subreddit'],
+                'mature': data['over_18'],
+                'url': data['url']
+            }
 
-        result.append(item)
+            result.append(item)
 
-    return result
+        return result
+
+    except Exception as e:
+        print(f'Error while parsing subreddit response: {e}')
+        return list()
 
 
 def get_url_filename(url):
@@ -59,7 +65,7 @@ async def download_image(session, url, folder):
     print(f'Downloading {url} to folder {folder}')
 
     try:
-        async with session.get(url) as response:
+        async with session.get(url, timeout=5) as response:
             if response.status != 200:
                 print(f'Failed to download: {url}')
             else:
@@ -111,3 +117,6 @@ if __name__ == '__main__':
 
     loop = asyncio.get_event_loop()
     loop.run_until_complete(main(args.folder, args.subreddit))
+
+    cleanup.remove_duplicates(args.folder)
+    cleanup.remove_by_resolution(args.folder)
