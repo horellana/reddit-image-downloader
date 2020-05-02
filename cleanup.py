@@ -52,7 +52,10 @@ def remove_by_resolution(folder):
                 continue
 
         except Exception as e:
-            print(f'Error: {e}', file=sys.stderr)
+            print(f'Error while removing files by resolution: {e}', file=sys.stderr)
+            print(f'Removing file, because it might be corrupted or invalid!')
+
+            os.remove(file.absolute())
 
 
 def main(folder):
