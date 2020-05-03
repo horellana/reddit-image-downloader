@@ -1,14 +1,17 @@
 import os
-import sys
 import json
+
 import asyncio
 import argparse
 from urllib.parse import urlparse
 
 import aiohttp
+from aiologger import Logger
 from aiofile import AIOFile, Writer
 
 import cleanup
+
+logger = Logger.with_default_handlers(name=__name__)
 
 def has_allowed_file_extensions(url):
     extensions = ['.jpeg',
@@ -26,7 +29,7 @@ def get_subreddit_url(subreddit):
     return f'https://www.reddit.com/r/{subreddit}.json'
 
 
-def parse_reddit_response(resp):
+async def parse_reddit_response(resp):
     try:
         result = []
 
@@ -45,7 +48,7 @@ def parse_reddit_response(resp):
         return result
 
     except Exception as e:
-        print(f'Error while parsing subreddit response: {e}')
+        await logger.error(f'Error while parsing subreddit response: {e}')
         return list()
 
 
@@ -53,21 +56,18 @@ def get_url_filename(url):
     parsed = urlparse(url)
 
     basename = os.path.basename(parsed.path)
-    print(f'Basename: {basename}')
-
     extension = os.path.splitext(parsed.path)[1]
-    print(f'Extension {extension}')
 
     return [basename, extension]
 
 
 async def download_image(session, url, folder):
-    print(f'Downloading {url} to folder {folder}')
+    await logger.info(f'Downloading {url} to folder {folder}')
 
     try:
-        async with session.get(url, timeout=5) as response:
+        async with session.get(url, timeout=60) as response:
             if response.status != 200:
-                print(f'Failed to download: {url}')
+                await logger.error(f'Failed to download: {url}')
             else:
                 [filename, extension] = get_url_filename(url)
 
@@ -76,10 +76,13 @@ async def download_image(session, url, folder):
                     bytes = await response.read()
                     await writer(bytes)
 
-                    print(f'Correctly downloaded {url}, to folder {folder}')
+                    await logger.info(f'Correctly downloaded {url}, to folder {folder}')
+
+    except asyncio.exceptions.TimeoutError:
+        await logger.error(f'Error while downloading image: {url}, timed out!')
 
     except Exception as e:
-        print(f'Error: {e}', file=sys.stderr)
+        await logger.error(f'Error while downloading image: {url} , something went wrong ... {e}')
 
 
 async def get_url(session, url):
@@ -92,7 +95,7 @@ async def download_subreddit(save_folder, subreddit):
 
     async with aiohttp.ClientSession() as session:
         response = await get_url(session, url)
-        images = parse_reddit_response(json.loads(response))
+        images = await parse_reddit_response(json.loads(response))
         tasks = [download_image(session, image['url'], save_folder)
                  for image in images
                  if has_allowed_file_extensions(image['url'])]
@@ -112,8 +115,6 @@ if __name__ == '__main__':
                         help='subreddit name', nargs='+',
                         required=True)
     args = parser.parse_args()
-
-    print(f'args: {args}')
 
     loop = asyncio.get_event_loop()
     loop.run_until_complete(main(args.folder, args.subreddit))
