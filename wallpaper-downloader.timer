@@ -1,0 +1,9 @@
+[Unit]
+Description=Run wallpaper-downloader.service every 5 minutes and on boot
+
+[Timer]
+OnBootSec=15min
+OnBootActivateSec=5min
+
+[Install]
+WantedBy=timers.target

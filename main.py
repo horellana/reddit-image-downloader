@@ -1,6 +1,6 @@
 import os
 import json
-
+import random
 import asyncio
 import argparse
 from urllib.parse import urlparse
@@ -12,6 +12,7 @@ from aiofile import AIOFile, Writer
 import cleanup
 
 logger = Logger.with_default_handlers(name=__name__)
+
 
 def has_allowed_file_extensions(url):
     extensions = ['.jpeg',
@@ -29,7 +30,15 @@ def get_subreddit_url(subreddit):
     return f'https://www.reddit.com/r/{subreddit}.json'
 
 
+async def jitter():
+    ms = random.randint(500, 1000) / 1000
+    await logger.info(f"jitter {ms}")
+    await asyncio.sleep(ms)
+
+
 async def parse_reddit_response(resp):
+    await logger.debug(json.dumps(resp, indent=1))
+
     try:
         result = []
 
@@ -62,10 +71,12 @@ def get_url_filename(url):
 
 
 async def download_image(session, url, folder):
+    await jitter()
+
     await logger.info(f'Downloading {url} to folder {folder}')
 
     try:
-        async with session.get(url, timeout=60) as response:
+        async with session.get(url, timeout=120) as response:
             if response.status != 200:
                 await logger.error(f'Failed to download: {url}')
             else:
@@ -75,7 +86,6 @@ async def download_image(session, url, folder):
                     writer = Writer(afh)
                     bytes = await response.read()
                     await writer(bytes)
-
                     await logger.info(f'Correctly downloaded {url}, to folder {folder}')
 
     except asyncio.exceptions.TimeoutError:
@@ -86,11 +96,15 @@ async def download_image(session, url, folder):
 
 
 async def get_url(session, url):
+    await jitter()
+
     async with session.get(url) as response:
         return await response.text()
 
 
 async def download_subreddit(save_folder, subreddit):
+    await jitter()
+
     url = get_subreddit_url(subreddit)
 
     async with aiohttp.ClientSession() as session:

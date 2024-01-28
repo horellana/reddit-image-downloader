@@ -1,12 +1,13 @@
 import os
-import sys
 import logging
 import pathlib
 import hashlib
-import argparse
 
 from PIL import Image
-from aiologger import Logger
+
+
+logging.basicConfig()
+
 
 def hash_file(path):
     with open(path, 'rb') as fh:
