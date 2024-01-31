@@ -1,0 +1,160 @@
+package main
+
+import (
+  "io"
+  "os"
+  "fmt"
+  "flag"
+  "sync"
+  "path"
+  "strings"
+  "net/url"
+  "net/http"
+  "encoding/json"
+)
+
+type ImageUrl struct {
+  Data struct {
+    Title string `json:"title"`
+    Subreddit string `json:"subreddit"`
+    Mature bool `json:"over_18"`
+    Url string `json:"url"`
+  } `json:"data"`
+}
+
+type SubredditImages struct {
+  Kind string `json:"kind"`
+  Data struct {
+    Children []ImageUrl `json:"children"`
+  } `json:"data"`
+}
+
+func GenerateUrl(subreddit string) string {
+  return fmt.Sprintf("https://www.reddit.com/r/%s.json", subreddit)
+}
+
+func ListAvailableImages(subredditUrl string) ([]ImageUrl, error) {
+  var response, getRequestError = http.Get(subredditUrl)
+
+  if getRequestError != nil {
+    return nil, getRequestError
+  }
+
+  defer response.Body.Close()
+
+  var subredditImages SubredditImages
+  var jsonDecodeError = json.NewDecoder(response.Body).Decode(&subredditImages)
+
+  if jsonDecodeError != nil {
+    return nil, jsonDecodeError
+  }
+
+  var result []ImageUrl
+  suffixes := []string{".jpeg",".png",".jpg"}
+
+  for _, children := range subredditImages.Data.Children {
+    for _, suffix := range suffixes {
+      if strings.HasSuffix(children.Data.Url, suffix) {
+	result = append(result, children)
+	break
+      }
+    }
+  }
+
+  return result, nil
+}
+
+func GenerateOutputPath(imageUrl string, rootFolder string) (string, error) {
+  var parsedUrl, err = url.Parse(imageUrl)
+
+  if err != nil {
+    return "", err
+  }
+
+  var urlPaths = strings.Split(parsedUrl.Path, "/")
+
+  return path.Join(rootFolder, urlPaths[len(urlPaths) - 1]), nil
+}
+
+func DownloadImage(imageUrl string, rootFolder string) (string, error) {
+  response, requestError := http.Get(imageUrl)
+
+  if requestError != nil {
+    return "", requestError
+  }
+
+  defer response.Body.Close()
+
+  outputPath, outputPathError := GenerateOutputPath(imageUrl, rootFolder)
+
+  if outputPathError != nil {
+    return "", outputPathError
+  }
+
+  file, fileCreateError := os.Create(outputPath)
+
+  if fileCreateError != nil {
+    return "", fileCreateError
+  }
+
+  defer file.Close()
+
+  _, fileWriteError := io.Copy(file, response.Body)
+
+  if fileWriteError != nil {
+    return "", fileWriteError
+  }
+
+  return outputPath, nil
+}
+
+func downloadImages(images []ImageUrl, rootFolder string) {
+  var wg sync.WaitGroup
+
+  for j := 0; j < len(images); j++ {
+    wg.Add(1)
+
+    go func(url string, rootFolder string) {
+      defer wg.Done()
+
+      path, err := DownloadImage(url, rootFolder)
+
+      if err != nil {
+	fmt.Println(err)
+      } else {
+	fmt.Println(path)
+      }
+    }(images[j].Data.Url, rootFolder)
+  }
+
+  wg.Wait()
+}
+
+func main() {
+  subredditsArg := flag.String("subreddits", "wallpapers,WQHD_Wallpaper", "Comma separated list of subreddit names")
+  outputFolderArg := flag.String("folder", "/tmp", "Path where to download images")
+
+  flag.Parse()
+
+  subreddits := strings.Split(*subredditsArg, ",")
+
+  var wg sync.WaitGroup
+  for i := 0; i < len(subreddits); i++ {
+    wg.Add(1)
+
+    go func(subreddit string) {
+      defer wg.Done()
+      var imageUrls, err = ListAvailableImages(GenerateUrl(subreddit))
+
+      if err != nil {
+	fmt.Println("Error ")
+	fmt.Println(err)
+	return
+      }
+
+      downloadImages(imageUrls, *outputFolderArg)
+    }(subreddits[i])
+  }
+
+  wg.Wait()
+}
