@@ -3,6 +3,7 @@ package main
 import (
   "io"
   "os"
+  "log"
   "fmt"
   "flag"
   "sync"
@@ -114,17 +115,17 @@ func downloadImages(images []ImageUrl, rootFolder string) {
   for j := 0; j < len(images); j++ {
     wg.Add(1)
 
-    go func(url string, rootFolder string) {
+    go func(image ImageUrl, rootFolder string) {
       defer wg.Done()
 
-      path, err := DownloadImage(url, rootFolder)
+      _, err := DownloadImage(image.Data.Url, rootFolder)
 
       if err != nil {
-	fmt.Println(err)
+	log.Printf("Could not download image: (r/%s) %s, error: %s", image.Data.Subreddit, image.Data.Url, err)
       } else {
-	fmt.Println(path)
+	log.Printf("Downloaded (r/%s) %s", image.Data.Subreddit, image.Data.Url)
       }
-    }(images[j].Data.Url, rootFolder)
+    }(images[j], rootFolder)
   }
 
   wg.Wait()
@@ -147,8 +148,7 @@ func main() {
       var imageUrls, err = ListAvailableImages(GenerateUrl(subreddit))
 
       if err != nil {
-	fmt.Println("Error ")
-	fmt.Println(err)
+	log.Printf("Could not list images for subreddit: %s, error: %s", subreddit, err);
 	return
       }
 
