@@ -34,7 +34,7 @@ func GenerateUrl(subreddit string) string {
   return fmt.Sprintf("https://www.reddit.com/r/%s.json", subreddit)
 }
 
-func ListAvailableImages(subredditUrl string) ([]ImageUrl, error) {
+func ListAvailableImages(subredditUrl string, filterMature bool) ([]ImageUrl, error) {
   var response, getRequestError = http.Get(subredditUrl)
 
   if getRequestError != nil {
@@ -53,10 +53,14 @@ func ListAvailableImages(subredditUrl string) ([]ImageUrl, error) {
   var result []ImageUrl
   suffixes := []string{".jpeg",".png",".jpg"}
 
-  for _, children := range subredditImages.Data.Children {
+  for _, child := range subredditImages.Data.Children {
     for _, suffix := range suffixes {
-      if strings.HasSuffix(children.Data.Url, suffix) {
-	result = append(result, children)
+      if child.Data.Mature && filterMature {
+	break
+      }
+
+      if strings.HasSuffix(child.Data.Url, suffix) {
+	result = append(result, child)
 	break
       }
     }
@@ -134,6 +138,7 @@ func downloadImages(images []ImageUrl, rootFolder string) {
 func main() {
   subredditsArg := flag.String("subreddits", "wallpapers,WQHD_Wallpaper", "Comma separated list of subreddit names")
   outputFolderArg := flag.String("folder", "/tmp", "Path where to download images")
+  matureArg := flag.Bool("mature", true, "Allow mature content")
 
   flag.Parse()
 
@@ -145,7 +150,7 @@ func main() {
 
     go func(subreddit string) {
       defer wg.Done()
-      var imageUrls, err = ListAvailableImages(GenerateUrl(subreddit))
+      var imageUrls, err = ListAvailableImages(GenerateUrl(subreddit), !*matureArg)
 
       if err != nil {
 	log.Printf("Could not list images for subreddit: %s, error: %s", subreddit, err);
