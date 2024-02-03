@@ -113,7 +113,7 @@ func DownloadImage(imageUrl string, rootFolder string) (string, error) {
   return outputPath, nil
 }
 
-func downloadImages(images []ImageUrl, rootFolder string) {
+func DownloadImages(images []ImageUrl, rootFolder string) {
   var wg sync.WaitGroup
 
   for j := 0; j < len(images); j++ {
@@ -157,7 +157,7 @@ func main() {
 	return
       }
 
-      downloadImages(imageUrls, *outputFolderArg)
+      DownloadImages(imageUrls, *outputFolderArg)
     }(subreddits[i])
   }
 
