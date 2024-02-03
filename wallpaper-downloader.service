@@ -5,7 +5,6 @@ After=network.target
 [Service]
 WorkingDirectory=/home/hector/personal/proyectos/reddit-wallpaper-downloader
 ExecStart=/home/hector/personal/proyectos/reddit-wallpaper-downloader/reddit-wallpaper-download -folder=/home/hector/images/wallpapers -subreddits=wallpapers,wallpaper,WHQD_Wallpaper,EarthPorn,spaceporn,lakeporn
-ExecStop=kill -9 $MAINPID
 User=hector
 
 [Install]
