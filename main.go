@@ -138,6 +138,61 @@ func DownloadImages(images []ImageUrl, rootFolder string) {
   wg.Wait()
 }
 
+func GetFileMD5(filePath string) (string, error) {
+  file, err := os.Open(filePath)
+  if err != nil {
+    return "", err
+  }
+  defer file.Close()
+
+  hash := md5.New()
+  if _, err := io.Copy(hash, file); err != nil {
+    return "", err
+  }
+
+  hashInBytes := hash.Sum(nil)
+  hashString := hex.EncodeToString(hashInBytes)
+
+  return hashString, nil
+}
+
+func RemoveDuplicateFiles(folderPath string) error {
+  fileChecksumMap := make(map[string][]string)
+
+  err := filepath.Walk(folderPath, func(path string, info os.FileInfo, err error) error {
+    if err != nil {
+      return err
+    }
+    if !info.IsDir() {
+      md5sum, err := GetFileMD5(path)
+      if err != nil {
+	return err
+      }
+      fileChecksumMap[md5sum] = append(fileChecksumMap[md5sum], path)
+    }
+    return nil
+  })
+  if err != nil {
+    return err
+  }
+
+  for _, paths := range fileChecksumMap {
+    if len(paths) > 1 {
+      // Remove duplicates by keeping only the first occurrence
+      paths = paths[1:]
+      for _, path := range paths {
+	fmt.Printf("Removing duplicate file: %s\n", path)
+	err := os.Remove(path)
+	if err != nil {
+	  fmt.Printf("Error removing file %s: %v\n", path, err)
+	}
+      }
+    }
+  }
+
+  return nil
+}
+
 func main() {
   subredditsArg := flag.String("subreddits", "wallpapers,WQHD_Wallpaper", "Comma separated list of subreddit names")
   outputFolderArg := flag.String("folder", "/tmp", "Path where to download images")
