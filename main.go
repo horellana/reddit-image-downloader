@@ -11,6 +11,9 @@ import (
   "strings"
   "net/url"
   "net/http"
+  "crypto/md5"
+  "encoding/hex"
+  "path/filepath"
   "encoding/json"
 )
 
@@ -162,4 +165,7 @@ func main() {
   }
 
   wg.Wait()
+
+  RemoveDuplicateFiles(*outputFolderArg)
+
 }
