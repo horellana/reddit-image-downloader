@@ -117,28 +117,6 @@ func DownloadImage(imageUrl string, rootFolder string) (string, error) {
   return outputPath, nil
 }
 
-func DownloadImages(images []ImageUrl, rootFolder string) {
-  var wg sync.WaitGroup
-
-  for j := 0; j < len(images); j++ {
-    wg.Add(1)
-
-    go func(image ImageUrl, rootFolder string) {
-      defer wg.Done()
-
-      _, err := DownloadImage(image.Data.Url, rootFolder)
-
-      if err != nil {
-	log.Printf("Could not download image: (r/%s) %s, error: %s", image.Data.Subreddit, image.Data.Url, err)
-      } else {
-	log.Printf("Downloaded (r/%s) %s", image.Data.Subreddit, image.Data.Url)
-      }
-    }(images[j], rootFolder)
-  }
-
-  wg.Wait()
-}
-
 func GetFileMD5(filePath string) (string, error) {
   file, err := os.Open(filePath)
   if err != nil {
@@ -241,11 +219,13 @@ func main() {
     go DownloadImageWorker(imagesChannel, &wg, *outputFolderArg)
   }
 
+  fmt.Printf("Started %d image downloader workers\n", workerCount)
+
   for i := 0; i < workerCount; i++ {
     go DownloadSubredditWorker(subredditChannel, imagesChannel, &wg, *outputFolderArg, !*matureArg)
   }
 
-  fmt.Printf("Started %d workers\n", workerCount)
+  fmt.Printf("Started %d subreddit downloader workers\n", workerCount)
 
   subreddits := strings.Split(*subredditsArg, ",")
 
