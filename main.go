@@ -9,6 +9,7 @@ import (
   "sync"
   "path"
   "strings"
+  "runtime"
   "net/url"
   "net/http"
   "crypto/md5"
@@ -193,6 +194,37 @@ func RemoveDuplicateFiles(folderPath string) error {
   return nil
 }
 
+func DownloadImageWorker(imagesChannel chan ImageUrl, wg *sync.WaitGroup, rootFolder string) {
+  for {
+    imageUrl := <-imagesChannel
+    fmt.Printf("Worker got image: (%s) %s\n", imageUrl.Data.Subreddit, imageUrl.Data.Url)
+
+    wg.Add(1)
+    DownloadImage(imageUrl.Data.Url, rootFolder)
+    wg.Done()
+  }
+}
+
+func DownloadSubredditWorker(subredditChannel chan string, imagesChannel chan ImageUrl, wg *sync.WaitGroup, rootFolder string, allowMature bool) {
+  for {
+    subreddit := <-subredditChannel
+
+    var imageUrls, err = ListAvailableImages(GenerateUrl(subreddit), allowMature)
+
+    if err != nil {
+      log.Printf("Could not list images for subreddit: %s, error: %s", subreddit, err);
+      wg.Done()
+      continue
+    }
+
+    for _, imageUrl := range imageUrls {
+      imagesChannel <- imageUrl
+    }
+
+    wg.Done()
+  }
+}
+
 func main() {
   subredditsArg := flag.String("subreddits", "wallpapers,WQHD_Wallpaper", "Comma separated list of subreddit names")
   outputFolderArg := flag.String("folder", "/tmp", "Path where to download images")
@@ -200,27 +232,29 @@ func main() {
 
   flag.Parse()
 
+  var wg sync.WaitGroup
+  imagesChannel := make(chan ImageUrl)
+  subredditChannel := make(chan string)
+  workerCount := (runtime.NumCPU() * 2) + 1
+
+  for i := 0; i < workerCount; i++ {
+    go DownloadImageWorker(imagesChannel, &wg, *outputFolderArg)
+  }
+
+  for i := 0; i < workerCount; i++ {
+    go DownloadSubredditWorker(subredditChannel, imagesChannel, &wg, *outputFolderArg, !*matureArg)
+  }
+
+  fmt.Printf("Started %d workers\n", workerCount)
+
   subreddits := strings.Split(*subredditsArg, ",")
 
-  var wg sync.WaitGroup
-  for i := 0; i < len(subreddits); i++ {
+  for _, subreddit := range subreddits {
     wg.Add(1)
-
-    go func(subreddit string) {
-      defer wg.Done()
-      var imageUrls, err = ListAvailableImages(GenerateUrl(subreddit), !*matureArg)
-
-      if err != nil {
-	log.Printf("Could not list images for subreddit: %s, error: %s", subreddit, err);
-	return
-      }
-
-      DownloadImages(imageUrls, *outputFolderArg)
-    }(subreddits[i])
+    subredditChannel <- subreddit
   }
 
   wg.Wait()
 
   RemoveDuplicateFiles(*outputFolderArg)
-
 }
