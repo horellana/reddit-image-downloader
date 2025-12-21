@@ -15,8 +15,8 @@ func TestGenerateUrl(t *testing.T) {
 }
 
 func TestGetImageOutputPath(t *testing.T) {
-  expected := "/tmp/foo.png"
-  got, _ := main.GenerateOutputPath("https://i.reddit.com/bar/foo.png", "/tmp")
+  expected := "/tmp/foo_bar.png"
+  got, _ := main.GenerateOutputPath("https://i.reddit.com/bar/foo.png", "/tmp", "bar")
 
   if got != expected {
     t.Errorf("expected %s got %s", expected, got);

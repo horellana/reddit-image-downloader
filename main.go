@@ -93,7 +93,7 @@ func ListAvailableImages(subredditUrl string, filterMature bool) ([]ImageUrl, er
   return result, nil
 }
 
-func GenerateOutputPath(imageUrl string, rootFolder string) (string, error) {
+func GenerateOutputPath(imageUrl string, rootFolder string, subreddit string) (string, error) {
   var parsedUrl, err = url.Parse(imageUrl)
 
   if err != nil {
@@ -101,11 +101,15 @@ func GenerateOutputPath(imageUrl string, rootFolder string) (string, error) {
   }
 
   var urlPaths = strings.Split(parsedUrl.Path, "/")
+  filename := urlPaths[len(urlPaths) - 1]
+  extension := filepath.Ext(filename)
+  name := strings.TrimSuffix(filename, extension)
+  newFilename := name + "_" + subreddit + extension
 
-  return path.Join(rootFolder, urlPaths[len(urlPaths) - 1]), nil
+  return path.Join(rootFolder, newFilename), nil
 }
 
-func DownloadImage(imageUrl string, rootFolder string) (string, error) {
+func DownloadImage(imageUrl string, rootFolder string, subreddit string) (string, error) {
   response, requestError := http.Get(imageUrl)
 
   if requestError != nil {
@@ -114,7 +118,7 @@ func DownloadImage(imageUrl string, rootFolder string) (string, error) {
 
   defer response.Body.Close()
 
-  outputPath, outputPathError := GenerateOutputPath(imageUrl, rootFolder)
+  outputPath, outputPathError := GenerateOutputPath(imageUrl, rootFolder, subreddit)
 
   if outputPathError != nil {
     return "", outputPathError
@@ -197,7 +201,7 @@ func DownloadImageWorker(imagesChannel chan ImageUrl, wg *sync.WaitGroup, rootFo
     imageUrl := <-imagesChannel
     slog.Info(MSG_WORKER_GOT_IMAGE, "subreddit", imageUrl.Data.Subreddit, "url", imageUrl.Data.Url)
 
-    _, err := DownloadImage(imageUrl.Data.Url, rootFolder)
+    _, err := DownloadImage(imageUrl.Data.Url, rootFolder, imageUrl.Data.Subreddit)
 
     if err != nil {
 	    slog.Error(MSG_DOWNLOAD_FAILED, "url", imageUrl.Data.Url, "error", err)
