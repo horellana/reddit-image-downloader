@@ -209,7 +209,7 @@ func DownloadSubredditWorker(subredditChannel chan string, imagesChannel chan Im
 }
 
 func main() {
-  fmt.Printf("Version 1")
+  fmt.Printf("Version 1\n")
   subredditsArg := flag.String("subreddits", "wallpapers,WQHD_Wallpaper", "Comma separated list of subreddit names")
   outputFolderArg := flag.String("folder", "/tmp", "Path where to download images")
   matureArg := flag.Bool("mature", true, "Allow mature content")
