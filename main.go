@@ -177,7 +177,6 @@ func DownloadImageWorker(imagesChannel chan ImageUrl, wg *sync.WaitGroup, rootFo
     imageUrl := <-imagesChannel
     fmt.Printf("Worker got image: (%s) %s\n", imageUrl.Data.Subreddit, imageUrl.Data.Url)
 
-    wg.Add(1)
     _, err := DownloadImage(imageUrl.Data.Url, rootFolder)
 
     if err != nil {
@@ -201,6 +200,7 @@ func DownloadSubredditWorker(subredditChannel chan string, imagesChannel chan Im
     }
 
     for _, imageUrl := range imageUrls {
+      wg.Add(1)
       imagesChannel <- imageUrl
     }
 
@@ -217,7 +217,7 @@ func main() {
   flag.Parse()
 
   var wg sync.WaitGroup
-  imagesChannel := make(chan ImageUrl)
+  imagesChannel := make(chan ImageUrl, 100)
   subredditChannel := make(chan string)
   workerCount := (runtime.NumCPU() * 2) + 1
 
