@@ -6,8 +6,8 @@ import (
 )
 
 func TestGenerateUrl(t *testing.T) {
-  expected := "https://www.reddit.com/r/foobar.json"
-  got := main.GenerateUrl("foobar")
+  expected := "https://www.reddit.com/r/foobar/top.json?t=all"
+  got := main.GenerateUrl("foobar", "top", "all")
 
   if got != expected {
     t.Errorf("expected %s got %s", expected, got);

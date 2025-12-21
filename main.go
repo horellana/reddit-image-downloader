@@ -44,8 +44,18 @@ type SubredditImages struct {
   } `json:"data"`
 }
 
-func GenerateUrl(subreddit string) string {
-  return "https://www.reddit.com/r/" + subreddit + ".json"
+func GenerateUrl(subreddit string, sort string, timeRange string) string {
+  if sort == "" {
+    sort = "top"
+  }
+  
+  baseUrl := "https://www.reddit.com/r/" + subreddit + "/" + sort + ".json"
+
+  if sort == "top" && timeRange != "" {
+    return baseUrl + "?t=" + timeRange
+  }
+
+  return baseUrl
 }
 
 func ListAvailableImages(subredditUrl string, filterMature bool) ([]ImageUrl, error) {
@@ -197,11 +207,11 @@ func DownloadImageWorker(imagesChannel chan ImageUrl, wg *sync.WaitGroup, rootFo
   }
 }
 
-func DownloadSubredditWorker(subredditChannel chan string, imagesChannel chan ImageUrl, wg *sync.WaitGroup, rootFolder string, allowMature bool) {
+func DownloadSubredditWorker(subredditChannel chan string, imagesChannel chan ImageUrl, wg *sync.WaitGroup, rootFolder string, allowMature bool, sort string, timeRange string) {
   for {
     subreddit := <-subredditChannel
 
-    var imageUrls, err = ListAvailableImages(GenerateUrl(subreddit), allowMature)
+    var imageUrls, err = ListAvailableImages(GenerateUrl(subreddit, sort, timeRange), allowMature)
 
     if err != nil {
       slog.Error(MSG_SUBREDDIT_LIST_FAILED, "subreddit", subreddit, "error", err)
@@ -236,6 +246,8 @@ func main() {
   subredditsArg := flag.String("subreddits", "wallpapers,WQHD_Wallpaper", "Comma separated list of subreddit names")
   outputFolderArg := flag.String("folder", "/tmp", "Path where to download images")
   matureArg := flag.Bool("mature", true, "Allow mature content")
+  sortArg := flag.String("sort", "top", "Sort order (top, hot, new, rising)")
+  timeArg := flag.String("time", "all", "Time range for top sort (hour, day, week, month, year, all)")
 
   flag.Parse()
 
@@ -251,7 +263,7 @@ func main() {
   slog.Info(MSG_WORKER_IMG_STARTED, "count", workerCount)
 
   for i := 0; i < workerCount; i++ {
-    go DownloadSubredditWorker(subredditChannel, imagesChannel, &wg, *outputFolderArg, !*matureArg)
+    go DownloadSubredditWorker(subredditChannel, imagesChannel, &wg, *outputFolderArg, !*matureArg, *sortArg, *timeArg)
   }
 
   slog.Info(MSG_WORKER_SUB_STARTED, "count", workerCount)
