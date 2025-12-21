@@ -3,8 +3,7 @@ package main
 import (
   "io"
   "os"
-  "log"
-  "fmt"
+  "log/slog"
   "flag"
   "sync"
   "path"
@@ -16,6 +15,17 @@ import (
   "encoding/hex"
   "path/filepath"
   "encoding/json"
+)
+
+const (
+	MSG_STARTUP                    = "STARTING_REDDIT_WALLPAPER_DOWNLOAD"
+	MSG_WORKER_IMG_STARTED         = "STARTED_IMAGE_DOWNLOADER_WORKERS"
+	MSG_WORKER_SUB_STARTED         = "STARTED_SUBREDDIT_DOWNLOADER_WORKERS"
+	MSG_WORKER_GOT_IMAGE           = "WORKER_GOT_IMAGE"
+	MSG_DOWNLOAD_FAILED            = "FAILED_TO_DOWNLOAD_IMAGE"
+	MSG_SUBREDDIT_LIST_FAILED      = "COULD_NOT_LIST_IMAGES_FOR_SUBREDDIT"
+	MSG_REMOVING_DUPLICATE         = "REMOVING_DUPLICATE_FILE"
+	MSG_ERROR_REMOVING_FILE        = "ERROR_REMOVING_FILE"
 )
 
 type ImageUrl struct {
@@ -35,7 +45,7 @@ type SubredditImages struct {
 }
 
 func GenerateUrl(subreddit string) string {
-  return fmt.Sprintf("https://www.reddit.com/r/%s.json", subreddit)
+  return "https://www.reddit.com/r/" + subreddit + ".json"
 }
 
 func ListAvailableImages(subredditUrl string, filterMature bool) ([]ImageUrl, error) {
@@ -160,10 +170,10 @@ func RemoveDuplicateFiles(folderPath string) error {
       // Remove duplicates by keeping only the first occurrence
       paths = paths[1:]
       for _, path := range paths {
-	fmt.Printf("Removing duplicate file: %s\n", path)
+	slog.Info(MSG_REMOVING_DUPLICATE, "path", path)
 	err := os.Remove(path)
 	if err != nil {
-	  fmt.Printf("Error removing file %s: %v\n", path, err)
+	  slog.Error(MSG_ERROR_REMOVING_FILE, "path", path, "error", err)
 	}
       }
     }
@@ -175,12 +185,12 @@ func RemoveDuplicateFiles(folderPath string) error {
 func DownloadImageWorker(imagesChannel chan ImageUrl, wg *sync.WaitGroup, rootFolder string) {
   for {
     imageUrl := <-imagesChannel
-    fmt.Printf("Worker got image: (%s) %s\n", imageUrl.Data.Subreddit, imageUrl.Data.Url)
+    slog.Info(MSG_WORKER_GOT_IMAGE, "subreddit", imageUrl.Data.Subreddit, "url", imageUrl.Data.Url)
 
     _, err := DownloadImage(imageUrl.Data.Url, rootFolder)
 
     if err != nil {
-	    fmt.Printf("Failed to download image: %s", err)
+	    slog.Error(MSG_DOWNLOAD_FAILED, "url", imageUrl.Data.Url, "error", err)
     }
 	
     wg.Done()
@@ -194,7 +204,7 @@ func DownloadSubredditWorker(subredditChannel chan string, imagesChannel chan Im
     var imageUrls, err = ListAvailableImages(GenerateUrl(subreddit), allowMature)
 
     if err != nil {
-      log.Printf("Could not list images for subreddit: %s, error: %s", subreddit, err);
+      slog.Error(MSG_SUBREDDIT_LIST_FAILED, "subreddit", subreddit, "error", err)
       wg.Done()
       continue
     }
@@ -209,7 +219,20 @@ func DownloadSubredditWorker(subredditChannel chan string, imagesChannel chan Im
 }
 
 func main() {
-  fmt.Printf("Version 1\n")
+  handler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+    ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+        if a.Key == slog.TimeKey {
+	    return slog.Attr{
+		Key:   a.Key,
+		Value: slog.StringValue(a.Value.Time().Format("15:04:05")),
+	    }
+        }
+        return a
+    },
+  })
+  slog.SetDefault(slog.New(handler))
+
+  slog.Info(MSG_STARTUP, "version", 1)
   subredditsArg := flag.String("subreddits", "wallpapers,WQHD_Wallpaper", "Comma separated list of subreddit names")
   outputFolderArg := flag.String("folder", "/tmp", "Path where to download images")
   matureArg := flag.Bool("mature", true, "Allow mature content")
@@ -225,13 +248,14 @@ func main() {
     go DownloadImageWorker(imagesChannel, &wg, *outputFolderArg)
   }
 
-  fmt.Printf("Started %d image downloader workers\n", workerCount)
+  slog.Info(MSG_WORKER_IMG_STARTED, "count", workerCount)
 
   for i := 0; i < workerCount; i++ {
     go DownloadSubredditWorker(subredditChannel, imagesChannel, &wg, *outputFolderArg, !*matureArg)
   }
 
-  fmt.Printf("Started %d subreddit downloader workers\n", workerCount)
+  slog.Info(MSG_WORKER_SUB_STARTED, "count", workerCount)
+
 
   subreddits := strings.Split(*subredditsArg, ",")
 
