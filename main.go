@@ -178,11 +178,11 @@ func DownloadImageWorker(imagesChannel chan ImageUrl, wg *sync.WaitGroup, rootFo
     fmt.Printf("Worker got image: (%s) %s\n", imageUrl.Data.Subreddit, imageUrl.Data.Url)
 
     wg.Add(1)
-    err := DownloadImage(imageUrl.Data.Url, rootFolder)
+    _, err := DownloadImage(imageUrl.Data.Url, rootFolder)
 
-	if err != nil {
-		fmt.Printf("Failed to download image: %s", err)
-	}
+    if err != nil {
+	    fmt.Printf("Failed to download image: %s", err)
+    }
 	
     wg.Done()
   }
