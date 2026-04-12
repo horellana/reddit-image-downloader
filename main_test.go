@@ -148,20 +148,20 @@ func TestFilterImages(t *testing.T) {
 
 func TestGetMinFileSize(t *testing.T) {
 	tests := []struct {
-		category string
+		width    int
+		height   int
 		expected int64
 	}{
-		{"4k", 800000},
-		{"2k", 400000},
-		{"1080p", 200000},
-		{"other", 100000},
-		{"unknown", 100000},
+		{3840, 2160, 829440}, // 4k
+		{2560, 1440, 368640}, // 2k
+		{1920, 1080, 207360}, // 1080p
+		{0, 0, 100000},       // other
 	}
 
 	for _, tt := range tests {
-		got := main.GetMinFileSize(tt.category)
+		got := main.GetMinFileSize(tt.width, tt.height)
 		if got != tt.expected {
-			t.Errorf("GetMinFileSize(%s) = %d; want %d", tt.category, got, tt.expected)
+			t.Errorf("GetMinFileSize(%d, %d) = %d; want %d", tt.width, tt.height, got, tt.expected)
 		}
 	}
 }

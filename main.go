@@ -153,17 +153,12 @@ func GetResolutionCategory(width int, height int) string {
 	return "other"
 }
 
-func GetMinFileSize(resolutionCategory string) int64 {
-	switch resolutionCategory {
-	case "4k":
-		return 800000 // 800 KB
-	case "2k":
-		return 400000 // 400 KB
-	case "1080p":
-		return 200000 // 200 KB
-	default:
+func GetMinFileSize(width int, height int) int64 {
+	if width == 0 || height == 0 {
 		return 100000 // 100 KB
 	}
+	pixels := int64(width) * int64(height)
+	return pixels / 10
 }
 
 func GenerateOutputPath(imageUrl string, rootFolder string, subreddit string, width int, height int) (string, error) {
@@ -193,8 +188,7 @@ func DownloadImage(imageUrl string, rootFolder string, subreddit string, width i
 
   defer response.Body.Close()
 
-  resolutionCategory := GetResolutionCategory(width, height)
-  minSize := GetMinFileSize(resolutionCategory)
+  minSize := GetMinFileSize(width, height)
 
   if response.ContentLength > 0 && response.ContentLength < minSize {
       return "", errors.New("image rejected: file size too small for resolution (likely low quality or upscaled)")
@@ -220,10 +214,15 @@ func DownloadImage(imageUrl string, rootFolder string, subreddit string, width i
 
   defer file.Close()
 
-  _, fileWriteError := io.Copy(file, response.Body)
+  bytesWritten, fileWriteError := io.Copy(file, response.Body)
 
   if fileWriteError != nil {
     return "", fileWriteError
+  }
+
+  if bytesWritten < minSize {
+      os.Remove(outputPath)
+      return "", errors.New("image rejected: downloaded file size too small for resolution (likely low quality or upscaled)")
   }
 
   return outputPath, nil
