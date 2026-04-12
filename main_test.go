@@ -15,12 +15,36 @@ func TestGenerateUrl(t *testing.T) {
 }
 
 func TestGetImageOutputPath(t *testing.T) {
-  expected := "/tmp/foo_bar.png"
-  got, _ := main.GenerateOutputPath("https://i.reddit.com/bar/foo.png", "/tmp", "bar")
+  expected := "/tmp/1080p/foo_bar.png"
+  got, _ := main.GenerateOutputPath("https://i.reddit.com/bar/foo.png", "/tmp", "bar", 1920, 1080)
 
   if got != expected {
     t.Errorf("expected %s got %s", expected, got);
   }
+}
+
+func TestGetResolutionCategory(t *testing.T) {
+	tests := []struct {
+		width    int
+		height   int
+		expected string
+	}{
+		{3840, 2160, "4k"},
+		{4000, 3000, "4k"},
+		{2560, 1440, "2k"},
+		{3000, 2000, "2k"},
+		{1920, 1080, "1080p"},
+		{2000, 1200, "1080p"},
+		{1280, 720, "other"},
+		{0, 0, "other"},
+	}
+
+	for _, tt := range tests {
+		got := main.GetResolutionCategory(tt.width, tt.height)
+		if got != tt.expected {
+			t.Errorf("GetResolutionCategory(%d, %d) = %s; want %s", tt.width, tt.height, got, tt.expected)
+		}
+	}
 }
 
 func TestCheckResolution(t *testing.T) {
@@ -119,5 +143,25 @@ func TestFilterImages(t *testing.T) {
 	got := main.FilterImages(children, false, "1080p")
 	if len(got) != 1 {
 		t.Errorf("Expected 1 image, got %d", len(got))
+	}
+}
+
+func TestGetMinFileSize(t *testing.T) {
+	tests := []struct {
+		category string
+		expected int64
+	}{
+		{"4k", 800000},
+		{"2k", 400000},
+		{"1080p", 200000},
+		{"other", 100000},
+		{"unknown", 100000},
+	}
+
+	for _, tt := range tests {
+		got := main.GetMinFileSize(tt.category)
+		if got != tt.expected {
+			t.Errorf("GetMinFileSize(%s) = %d; want %d", tt.category, got, tt.expected)
+		}
 	}
 }

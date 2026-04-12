@@ -11,6 +11,7 @@ import (
   "runtime"
   "net/url"
   "net/http"
+  "errors"
   "crypto/md5"
   "encoding/hex"
   "path/filepath"
@@ -139,7 +140,33 @@ func ListAvailableImages(subredditUrl string, filterMature bool, minRes string) 
 	return FilterImages(subredditImages.Data.Children, filterMature, minRes), nil
 }
 
-func GenerateOutputPath(imageUrl string, rootFolder string, subreddit string) (string, error) {
+func GetResolutionCategory(width int, height int) string {
+	if width >= 3840 && height >= 2160 {
+		return "4k"
+	}
+	if width >= 2560 && height >= 1440 {
+		return "2k"
+	}
+	if width >= 1920 && height >= 1080 {
+		return "1080p"
+	}
+	return "other"
+}
+
+func GetMinFileSize(resolutionCategory string) int64 {
+	switch resolutionCategory {
+	case "4k":
+		return 800000 // 800 KB
+	case "2k":
+		return 400000 // 400 KB
+	case "1080p":
+		return 200000 // 200 KB
+	default:
+		return 100000 // 100 KB
+	}
+}
+
+func GenerateOutputPath(imageUrl string, rootFolder string, subreddit string, width int, height int) (string, error) {
   var parsedUrl, err = url.Parse(imageUrl)
 
   if err != nil {
@@ -152,10 +179,12 @@ func GenerateOutputPath(imageUrl string, rootFolder string, subreddit string) (s
   name := strings.TrimSuffix(filename, extension)
   newFilename := name + "_" + subreddit + extension
 
-  return path.Join(rootFolder, newFilename), nil
+  resolutionCategory := GetResolutionCategory(width, height)
+
+  return path.Join(rootFolder, resolutionCategory, newFilename), nil
 }
 
-func DownloadImage(imageUrl string, rootFolder string, subreddit string) (string, error) {
+func DownloadImage(imageUrl string, rootFolder string, subreddit string, width int, height int) (string, error) {
   response, requestError := http.Get(imageUrl)
 
   if requestError != nil {
@@ -164,10 +193,23 @@ func DownloadImage(imageUrl string, rootFolder string, subreddit string) (string
 
   defer response.Body.Close()
 
-  outputPath, outputPathError := GenerateOutputPath(imageUrl, rootFolder, subreddit)
+  resolutionCategory := GetResolutionCategory(width, height)
+  minSize := GetMinFileSize(resolutionCategory)
+
+  if response.ContentLength > 0 && response.ContentLength < minSize {
+      return "", errors.New("image rejected: file size too small for resolution (likely low quality or upscaled)")
+  }
+
+  outputPath, outputPathError := GenerateOutputPath(imageUrl, rootFolder, subreddit, width, height)
 
   if outputPathError != nil {
     return "", outputPathError
+  }
+
+  // Ensure resolution directory exists
+  dir := filepath.Dir(outputPath)
+  if err := os.MkdirAll(dir, 0755); err != nil {
+    return "", err
   }
 
   file, fileCreateError := os.Create(outputPath)
@@ -247,7 +289,14 @@ func DownloadImageWorker(imagesChannel chan ImageUrl, wg *sync.WaitGroup, rootFo
     imageUrl := <-imagesChannel
     slog.Info(MSG_WORKER_GOT_IMAGE, "subreddit", imageUrl.Data.Subreddit, "url", imageUrl.Data.Url)
 
-    _, err := DownloadImage(imageUrl.Data.Url, rootFolder, imageUrl.Data.Subreddit)
+    width := 0
+    height := 0
+    if len(imageUrl.Data.Preview.Images) > 0 {
+      width = imageUrl.Data.Preview.Images[0].Source.Width
+      height = imageUrl.Data.Preview.Images[0].Source.Height
+    }
+
+    _, err := DownloadImage(imageUrl.Data.Url, rootFolder, imageUrl.Data.Subreddit, width, height)
 
     if err != nil {
 	    slog.Error(MSG_DOWNLOAD_FAILED, "url", imageUrl.Data.Url, "error", err)
