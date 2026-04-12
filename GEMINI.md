@@ -8,8 +8,8 @@
 
 *   **Concurrent Downloading:** Spawns multiple workers to handle subreddit parsing and image downloading simultaneously.
 *   **Duplicate Removal:** Automatically detects and removes duplicate images in the output folder using MD5 hashing.
-*   **Filtering:** Filters for common image formats (`.jpg`, `.jpeg`, `.png`) and supports an optional mature content filter.
-*   **Systemd Integration:** Includes service and timer units for automated background execution.
+*   **Filename Tagging:** Appends the subreddit name to the filename (e.g. `image_SpacePorn.jpg`) to preserve context.
+*   **Filtering:** Filters for common image formats (`.jpg`, `.jpeg`, `.png`), supports an optional mature content filter, and uses a file size heuristic to reject low-quality or upscaled images based on their resolution.
 
 ## Building and Running
 
@@ -36,19 +36,13 @@ Run the compiled binary with the following flags:
 *   `-subreddits`: Comma-separated list of subreddits to download from. (Default: "wallpapers,WQHD_Wallpaper")
 *   `-folder`: Path to the directory where images will be saved. (Default: "/tmp")
 *   `-mature`: Boolean flag to allow mature content. (Default: true)
+*   `-min-res`: Minimum resolution for downloaded wallpapers. Options: `1080p`, `2k`, `4k`, `none`. (Default: "1080p")
 
 **Example:**
 
 ```bash
 ./reddit-wallpaper-download -subreddits="EarthPorn,SpacePorn" -folder="./wallpapers" -mature=false
 ```
-
-## Systemd Automation
-
-The project includes systemd unit files to automate the downloading process.
-
-*   `wallpaper-downloader.service`: Defines the service execution. **Note:** This file currently contains hardcoded paths (`/home/hector/...`) that must be updated to match your environment before installation.
-*   `wallpaper-downloader.timer`: Configures the schedule for the service (e.g., running on boot).
 
 ## Architecture
 
