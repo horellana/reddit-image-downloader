@@ -34,6 +34,14 @@ type ImageUrl struct {
     Subreddit string `json:"subreddit"`
     Mature bool `json:"over_18"`
     Url string `json:"url"`
+    Preview struct {
+        Images []struct {
+            Source struct {
+                Width int `json:"width"`
+                Height int `json:"height"`
+            } `json:"source"`
+        } `json:"images"`
+    } `json:"preview"`
   } `json:"data"`
 }
 
@@ -58,39 +66,77 @@ func GenerateUrl(subreddit string, sort string, timeRange string) string {
   return baseUrl
 }
 
-func ListAvailableImages(subredditUrl string, filterMature bool) ([]ImageUrl, error) {
-  var response, getRequestError = http.Get(subredditUrl)
+func CheckResolution(width int, height int, minRes string) (bool, bool) {
+	switch minRes {
+	case "1080p":
+		return width >= 1920 && height >= 1080, true
+	case "2k":
+		return width >= 2560 && height >= 1440, true
+	case "4k":
+		return width >= 3840 && height >= 2160, true
+	case "none", "":
+		return true, true
+	default:
+		return false, false
+	}
+}
 
-  if getRequestError != nil {
-    return nil, getRequestError
-  }
+func FilterImages(children []ImageUrl, filterMature bool, minRes string) []ImageUrl {
+	var result []ImageUrl
+	suffixes := []string{".jpeg", ".png", ".jpg"}
 
-  defer response.Body.Close()
+	for _, child := range children {
+		if child.Data.Mature && filterMature {
+			continue
+		}
 
-  var subredditImages SubredditImages
-  var jsonDecodeError = json.NewDecoder(response.Body).Decode(&subredditImages)
+		hasCorrectSuffix := false
+		for _, suffix := range suffixes {
+			if strings.HasSuffix(strings.ToLower(child.Data.Url), suffix) {
+				hasCorrectSuffix = true
+				break
+			}
+		}
 
-  if jsonDecodeError != nil {
-    return nil, jsonDecodeError
-  }
+		if !hasCorrectSuffix {
+			continue
+		}
 
-  var result []ImageUrl
-  suffixes := []string{".jpeg",".png",".jpg"}
+		if len(child.Data.Preview.Images) > 0 {
+			width := child.Data.Preview.Images[0].Source.Width
+			height := child.Data.Preview.Images[0].Source.Height
+			meetsRes, _ := CheckResolution(width, height, minRes)
+			if !meetsRes {
+				continue
+			}
+		} else if minRes != "" && minRes != "none" {
+			// Skip if min resolution requested but metadata is missing
+			continue
+		}
 
-  for _, child := range subredditImages.Data.Children {
-    for _, suffix := range suffixes {
-      if child.Data.Mature && filterMature {
-	break
-      }
+		result = append(result, child)
+	}
 
-      if strings.HasSuffix(child.Data.Url, suffix) {
-	result = append(result, child)
-	break
-      }
-    }
-  }
+	return result
+}
 
-  return result, nil
+func ListAvailableImages(subredditUrl string, filterMature bool, minRes string) ([]ImageUrl, error) {
+	var response, getRequestError = http.Get(subredditUrl)
+
+	if getRequestError != nil {
+		return nil, getRequestError
+	}
+
+	defer response.Body.Close()
+
+	var subredditImages SubredditImages
+	var jsonDecodeError = json.NewDecoder(response.Body).Decode(&subredditImages)
+
+	if jsonDecodeError != nil {
+		return nil, jsonDecodeError
+	}
+
+	return FilterImages(subredditImages.Data.Children, filterMature, minRes), nil
 }
 
 func GenerateOutputPath(imageUrl string, rootFolder string, subreddit string) (string, error) {
@@ -211,11 +257,11 @@ func DownloadImageWorker(imagesChannel chan ImageUrl, wg *sync.WaitGroup, rootFo
   }
 }
 
-func DownloadSubredditWorker(subredditChannel chan string, imagesChannel chan ImageUrl, wg *sync.WaitGroup, rootFolder string, allowMature bool, sort string, timeRange string) {
+func DownloadSubredditWorker(subredditChannel chan string, imagesChannel chan ImageUrl, wg *sync.WaitGroup, rootFolder string, allowMature bool, sort string, timeRange string, minRes string) {
   for {
     subreddit := <-subredditChannel
 
-    var imageUrls, err = ListAvailableImages(GenerateUrl(subreddit, sort, timeRange), allowMature)
+    var imageUrls, err = ListAvailableImages(GenerateUrl(subreddit, sort, timeRange), allowMature, minRes)
 
     if err != nil {
       slog.Error(MSG_SUBREDDIT_LIST_FAILED, "subreddit", subreddit, "error", err)
@@ -252,8 +298,15 @@ func main() {
   matureArg := flag.Bool("mature", true, "Allow mature content")
   sortArg := flag.String("sort", "top", "Sort order (top, hot, new, rising)")
   timeArg := flag.String("time", "all", "Time range for top sort (hour, day, week, month, year, all)")
+  minResArg := flag.String("min-res", "1080p", "Minimum resolution (1080p, 2k, 4k, none)")
 
   flag.Parse()
+
+  // Validate minResArg
+  if _, isValid := CheckResolution(0, 0, *minResArg); !isValid {
+    slog.Error("Invalid -min-res value. Choose from: 1080p, 2k, 4k, none")
+    os.Exit(1)
+  }
 
   var wg sync.WaitGroup
   imagesChannel := make(chan ImageUrl, 100)
@@ -267,7 +320,7 @@ func main() {
   slog.Info(MSG_WORKER_IMG_STARTED, "count", workerCount)
 
   for i := 0; i < workerCount; i++ {
-    go DownloadSubredditWorker(subredditChannel, imagesChannel, &wg, *outputFolderArg, !*matureArg, *sortArg, *timeArg)
+    go DownloadSubredditWorker(subredditChannel, imagesChannel, &wg, *outputFolderArg, !*matureArg, *sortArg, *timeArg, *minResArg)
   }
 
   slog.Info(MSG_WORKER_SUB_STARTED, "count", workerCount)

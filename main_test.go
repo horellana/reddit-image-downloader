@@ -22,3 +22,102 @@ func TestGetImageOutputPath(t *testing.T) {
     t.Errorf("expected %s got %s", expected, got);
   }
 }
+
+func TestCheckResolution(t *testing.T) {
+	tests := []struct {
+		width    int
+		height   int
+		minRes   string
+		expected bool
+		isValid  bool
+	}{
+		{1920, 1080, "1080p", true, true},
+		{3840, 2160, "1080p", true, true},
+		{1280, 720, "1080p", false, true},
+		{2560, 1440, "2k", true, true},
+		{1920, 1080, "2k", false, true},
+		{3840, 2160, "4k", true, true},
+		{2560, 1440, "4k", false, true},
+		{0, 0, "1080p", false, true},
+		{0, 0, "none", true, true},
+		{1920, 1080, "invalid", false, false},
+	}
+
+	for _, tt := range tests {
+		meets, valid := main.CheckResolution(tt.width, tt.height, tt.minRes)
+		if valid != tt.isValid {
+			t.Errorf("CheckResolution(%d, %d, %s) valid = %v; want %v", tt.width, tt.height, tt.minRes, valid, tt.isValid)
+		}
+		if meets != tt.expected {
+			t.Errorf("CheckResolution(%d, %d, %s) meets = %v; want %v", tt.width, tt.height, tt.minRes, meets, tt.expected)
+		}
+	}
+}
+
+func TestFilterImages(t *testing.T) {
+	children := []main.ImageUrl{
+		{Data: struct {
+			Title     string `json:"title"`
+			Subreddit string `json:"subreddit"`
+			Mature    bool   `json:"over_18"`
+			Url       string `json:"url"`
+			Preview   struct {
+				Images []struct {
+					Source struct {
+						Width  int `json:"width"`
+						Height int `json:"height"`
+					} `json:"source"`
+				} `json:"images"`
+			} `json:"preview"`
+		}{Url: "test.jpg", Preview: struct {
+			Images []struct {
+				Source struct {
+					Width  int `json:"width"`
+					Height int `json:"height"`
+				} `json:"source"`
+			} `json:"images"`
+		}{Images: []struct {
+			Source struct {
+				Width  int `json:"width"`
+				Height int `json:"height"`
+			} `json:"source"`
+		}{{Source: struct {
+			Width  int `json:"width"`
+			Height int `json:"height"`
+		}{Width: 1920, Height: 1080}}}}}},
+		{Data: struct {
+			Title     string `json:"title"`
+			Subreddit string `json:"subreddit"`
+			Mature    bool   `json:"over_18"`
+			Url       string `json:"url"`
+			Preview   struct {
+				Images []struct {
+					Source struct {
+						Width  int `json:"width"`
+						Height int `json:"height"`
+					} `json:"source"`
+				} `json:"images"`
+			} `json:"preview"`
+		}{Url: "small.png", Preview: struct {
+			Images []struct {
+				Source struct {
+					Width  int `json:"width"`
+					Height int `json:"height"`
+				} `json:"source"`
+			} `json:"images"`
+		}{Images: []struct {
+			Source struct {
+				Width  int `json:"width"`
+				Height int `json:"height"`
+			} `json:"source"`
+		}{{Source: struct {
+			Width  int `json:"width"`
+			Height int `json:"height"`
+		}{Width: 1280, Height: 720}}}}}},
+	}
+
+	got := main.FilterImages(children, false, "1080p")
+	if len(got) != 1 {
+		t.Errorf("Expected 1 image, got %d", len(got))
+	}
+}
